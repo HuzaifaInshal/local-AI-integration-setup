@@ -22,7 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.env
 .env
 ..env
 Backed/.env
 ../Backed/.env
+
+# Python Virtual Environment
+.venv/
+venv/
+__pycache__/
+*.pyc
