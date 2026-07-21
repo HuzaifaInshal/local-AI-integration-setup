@@ -1,9 +1,9 @@
 
-import { Database, MessageSquare, Settings, RefreshCw } from 'lucide-react';
+import { Database, MessageSquare, Settings, RefreshCw, BarChart2 } from 'lucide-react';
 
 interface SidebarProps {
-  activeTab: 'nlsql' | 'chat' | 'settings';
-  setActiveTab: (tab: 'nlsql' | 'chat' | 'settings') => void;
+  activeTab: 'nlsql' | 'chat' | 'settings' | 'analytics';
+  setActiveTab: (tab: 'nlsql' | 'chat' | 'settings' | 'analytics') => void;
   isConnected: boolean;
   onRefresh: () => void;
 }
@@ -25,11 +25,10 @@ export function Sidebar({ activeTab, setActiveTab, isConnected, onRefresh }: Sid
         <nav className="p-4 space-y-1">
           <button
             onClick={() => setActiveTab('nlsql')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'nlsql'
-                ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                : 'text-slate-400 hover:bg-slate-800/40 hover:text-white border border-transparent'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'nlsql'
+              ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+              : 'text-slate-400 hover:bg-slate-800/40 hover:text-white border border-transparent'
+              }`}
           >
             <Database className="w-4 h-4" />
             <span>NL2SQL Workspace</span>
@@ -37,23 +36,32 @@ export function Sidebar({ activeTab, setActiveTab, isConnected, onRefresh }: Sid
 
           <button
             onClick={() => setActiveTab('chat')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'chat'
-                ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                : 'text-slate-400 hover:bg-slate-800/40 hover:text-white border border-transparent'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'chat'
+              ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+              : 'text-slate-400 hover:bg-slate-800/40 hover:text-white border border-transparent'
+              }`}
           >
             <MessageSquare className="w-4 h-4" />
             <span>General Assistant</span>
           </button>
 
           <button
+            onClick={() => setActiveTab('analytics')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'analytics'
+              ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+              : 'text-slate-400 hover:bg-slate-800/40 hover:text-white border border-transparent'
+              }`}
+          >
+            <BarChart2 className="w-4 h-4" />
+            <span>Analytics</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('settings')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'settings'
-                ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                : 'text-slate-400 hover:bg-slate-800/40 hover:text-white border border-transparent'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === 'settings'
+              ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+              : 'text-slate-400 hover:bg-slate-800/40 hover:text-white border border-transparent'
+              }`}
           >
             <Settings className="w-4 h-4" />
             <span>Database Config</span>
@@ -65,9 +73,9 @@ export function Sidebar({ activeTab, setActiveTab, isConnected, onRefresh }: Sid
       <div className="p-4 border-t border-[rgba(255,255,255,0.06)] bg-[#070B14]">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-slate-500">Database Connection</span>
-          <button 
-            onClick={onRefresh} 
-            title="Refresh database schema" 
+          <button
+            onClick={onRefresh}
+            title="Refresh database schema"
             className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition"
           >
             <RefreshCw className="w-3 h-3" />

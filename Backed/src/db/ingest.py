@@ -162,6 +162,7 @@ def main():
         qdrant_client = QdrantClient(url=QDRANT_URL)
         # Verify connection
         qdrant_client.get_collections()
+        print(f"✅ Successfully connected to Qdrant at {QDRANT_URL}")
     except Exception as e:
         print(f"❌ Failed to connect to Qdrant: {e}")
         print("Please verify that Qdrant is running locally.")

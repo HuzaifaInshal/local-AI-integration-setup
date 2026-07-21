@@ -7,7 +7,7 @@ export interface ChatCompletionMessage {
 }
 
 export async function callAIServer(messages: ChatCompletionMessage[], temperature = 0.0): Promise<string> {
-  const url = `${config.AI_SERVER_URL}/generate`;
+  const url = `${config.LLM_SERVER_URL}/generate`;
   try {
     const response = await axios.post(url, {
       messages,
