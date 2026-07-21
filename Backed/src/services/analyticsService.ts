@@ -2,6 +2,11 @@ import axios from 'axios';
 import { config } from '../config/env.js';
 import { callAIServer } from './aiService.js';
 
+function logStep(message: string) {
+  const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+  console.log(`[${timestamp}] ${message}`);
+}
+
 interface SourceCitation {
   document_name: string;
   page_number: number;
@@ -20,7 +25,7 @@ export async function queryPDFAnalytics(
   year?: number
 ): Promise<QueryAnalyticsResponse> {
   // 1. Generate query embedding from embedding server
-  console.log("Generating query embedding...");
+  logStep("Generating query embedding...");
   let queryEmbedding: number[];
   try {
     const embedUrl = `${config.EMBEDDING_SERVER_URL}/embed`;
@@ -39,7 +44,7 @@ export async function queryPDFAnalytics(
   }
 
   // 2. Query Qdrant with filters
-  console.log("Searching Qdrant Vector Store...");
+  logStep("Searching Qdrant Vector Store...");
   const filterObject: any = { must: [] };
   if (company) {
     filterObject.must.push({
@@ -81,7 +86,7 @@ export async function queryPDFAnalytics(
   }
 
   // 3. Rerank retrieved candidate chunks
-  console.log(`Reranking ${candidates.length} candidates...`);
+  logStep(`Reranking ${candidates.length} candidates...`);
   const docTexts = candidates.map(c => c.payload.text);
   let rerankedList = candidates;
   
@@ -120,7 +125,7 @@ export async function queryPDFAnalytics(
   });
 
   // 5. Query LLM (Qwen) with context
-  console.log("Generating final synthesis from LLM...");
+  logStep("Generating final synthesis from LLM...");
   const systemPrompt = "You are a professional financial assistant. Answer the user's analytics query based ONLY on the provided document excerpts. If the answer cannot be determined from the excerpts, reply that the information is not present in the loaded context. Always cite the Excerpt number when referencing facts.";
   const userPrompt = `Excerpts:\n${contextSnippet}\nQuestion: ${query}\n\nAnswer:`;
 

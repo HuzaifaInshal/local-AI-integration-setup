@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search, Sparkles, FileText, Calendar, Building, ListFilter, AlertCircle, Bookmark } from 'lucide-react';
+import { API_BASE } from '../config/api';
 
 interface Source {
   document_name: string;
@@ -27,8 +28,8 @@ export function AnalyticsPanel() {
     setSources([]);
 
     try {
-      // Backend resides on the same origin (relative path)
-      const response = await fetch('/api/analytics/query', {
+      // Backend resides on the same origin (using configured base path)
+      const response = await fetch(`${API_BASE}/analytics/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
