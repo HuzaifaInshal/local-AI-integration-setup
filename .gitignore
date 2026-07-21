@@ -33,3 +33,7 @@ Backed/.env
 venv/
 __pycache__/
 *.pyc
+
+# Qdrant generated files
+.qdrant*
+qdrant_*
