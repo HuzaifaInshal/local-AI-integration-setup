@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from docling.document_converter import DocumentConverter
+from docling.chunking import HybridChunker
 
 # Load environment variables
 load_dotenv()
@@ -55,64 +56,32 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
     result = converter.convert(pdf_path)
     doc = result.document
     
-    # 2. Extract Chunks with provenance (page numbers & headings)
-    print("Chunking document sections...")
-    chunks = []
-    current_chunk_parts = []
-    current_chunk_length = 0
-    current_page = 1
-    current_page_start = 1
-    current_section = "General"
+    # 2. Chunking with Docling's native Hybrid Chunker (Layout & Token aware)
+    print("Generating structure-aware chunks with Docling HybridChunker...")
+    chunker = HybridChunker(max_tokens=512)
+    chunk_list = list(chunker.chunk(dl_doc=doc))
     
-    for item, level in doc.iterate_items():
-        # Get page number from provenance
-        if item.prov:
-            current_page = item.prov[0].page_no
-            
-        item_text = ""
-        item_type = type(item).__name__
+    chunks = []
+    for chunk in chunk_list:
+        # Get page numbers from document item provenance (prov)
+        pages = sorted({
+            prov.page_no 
+            for item in chunk.meta.doc_items 
+            for prov in item.prov 
+            if hasattr(prov, "page_no")
+        })
+        page_number = pages[0] if pages else 1
         
-        if item_type == "HeadingItem":
-            current_section = item.text
-            item_text = f"\n### {item.text}\n"
-        elif item_type == "TableItem":
-            try:
-                # Convert table structure to Markdown
-                df = item.export_to_dataframe(doc=doc)
-                item_text = "\n" + df.to_markdown(index=False) + "\n"
-            except Exception:
-                item_text = f"\n[Table]: {item.text}\n"
-        else:
-            item_text = item.text
-            
-        if not item_text:
-            continue
-            
-        item_len = len(item_text)
+        # Get hierarchical section path
+        section_path = " > ".join(chunk.meta.headings) if chunk.meta.headings else "General"
         
-        # Max chunk size ~3000 chars (~750 tokens)
-        if current_chunk_length + item_len > 3000 and current_chunk_parts:
-            chunk_text = "\n".join(current_chunk_parts)
-            chunks.append({
-                "text": chunk_text,
-                "page_number": current_page_start,
-                "section": current_section
-            })
-            current_chunk_parts = [item_text]
-            current_chunk_length = item_len
-            current_page_start = current_page
-        else:
-            current_chunk_parts.append(item_text)
-            current_chunk_length += item_len
-            if len(current_chunk_parts) == 1:
-                current_page_start = current_page
-                
-    if current_chunk_parts:
-        chunk_text = "\n".join(current_chunk_parts)
+        # Get contextualized text (natively prepends relevant parent headings)
+        context_text = chunker.contextualize(chunk)
+        
         chunks.append({
-            "text": chunk_text,
-            "page_number": current_page_start,
-            "section": current_section
+            "text": context_text,
+            "page_number": page_number,
+            "section": section_path
         })
         
     print(f"Generated {len(chunks)} chunks.")
@@ -135,6 +104,7 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
 
     # 4. Generate Embeddings & Batch Upsert
     print("Generating embeddings via server...")
+    # Prefix text with Nomic-embed search prefix + our metadata context
     texts_to_embed = [
         f"search_document: [Company: {company_name} | Year: {year}] {c['text']}"
         for c in chunks
@@ -194,7 +164,7 @@ def main():
         qdrant_client.get_collections()
     except Exception as e:
         print(f"❌ Failed to connect to Qdrant: {e}")
-        print("Please verify that Qdrant is running locally via Docker.")
+        print("Please verify that Qdrant is running locally.")
         sys.exit(1)
 
     # Initialize Qdrant collection if not exists
