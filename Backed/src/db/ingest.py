@@ -8,9 +8,20 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from docling.document_converter import DocumentConverter
 from docling.chunking import HybridChunker
+import logging
 
 # Load environment variables
 load_dotenv()
+
+# Configure Logging to see Docling conversion progress in real-time
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S"
+)
+logging.getLogger("docling").setLevel(logging.DEBUG)
+logging.getLogger("docling.pipeline.base_pipeline").setLevel(logging.DEBUG)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 # Configuration
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
