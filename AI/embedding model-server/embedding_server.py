@@ -48,10 +48,22 @@ class EmbeddingServer:
     @modal.enter()
     def load_model(self):
         from transformers import AutoTokenizer, AutoModel
-        from docling.document_converter import DocumentConverter
-        from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+        from docling.document_converter import DocumentConverter, PdfFormatOption
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.datamodel.base_models import InputFormat
         from docling.chunking import HybridChunker
         import torch
+        import logging
+
+        # Configure logging for Modal container environment
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%H:%M:%S"
+        )
+        logging.getLogger("docling").setLevel(logging.DEBUG)
+        logging.getLogger("docling.pipeline.base_pipeline").setLevel(logging.DEBUG)
+        logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
         print("Loading tokenizer...")
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
@@ -62,10 +74,14 @@ class EmbeddingServer:
         self.model.eval()
         
         print("Configuring Docling PDF Converter with GPU...")
-        acc_options = AcceleratorOptions(
-            device=AcceleratorDevice.CUDA if torch.cuda.is_available() else AcceleratorDevice.CPU
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.accelerator_options.device = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        self.doc_converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
         )
-        self.doc_converter = DocumentConverter(accelerator_options=acc_options)
         
         # Initialize standard hybrid chunker
         self.chunker = HybridChunker(max_tokens=512)
