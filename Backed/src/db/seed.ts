@@ -10,257 +10,81 @@ async function seed() {
     
     console.log("Creating tables...");
     
-    // 1. Branches
+    // 1. Clients
     await query(`
-      CREATE TABLE branches (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        city VARCHAR(50) NOT NULL,
-        address VARCHAR(150) NOT NULL
+      CREATE TABLE clients (
+        crimsid INT PRIMARY KEY,
+        t24_id VARCHAR(20) UNIQUE NOT NULL,
+        customer_name VARCHAR(200) NOT NULL,
+        pr_category VARCHAR(50) NOT NULL,
+        business_segment VARCHAR(50) NOT NULL,
+        branch_code INT NOT NULL,
+        branch_name VARCHAR(100) NOT NULL,
+        sbp_parent VARCHAR(200) NOT NULL,
+        sbp_child VARCHAR(200) NOT NULL,
+        client_sales BIGINT NOT NULL,
+        client_equity BIGINT NOT NULL,
+        client_opening_date DATE NOT NULL,
+        legal_entity VARCHAR(100) NOT NULL,
+        pep VARCHAR(5) NOT NULL
       );
     `);
 
-    // 2. Employees
+    // 2. Ratings
     await query(`
-      CREATE TABLE employees (
+      CREATE TABLE ratings (
         id SERIAL PRIMARY KEY,
-        branch_id INT REFERENCES branches(id) ON DELETE SET NULL,
-        first_name VARCHAR(50) NOT NULL,
-        last_name VARCHAR(50) NOT NULL,
-        role VARCHAR(50) NOT NULL,
-        salary NUMERIC(10, 2) NOT NULL,
-        hire_date DATE NOT NULL
-      );
-    `);
-
-    // 3. Customers
-    await query(`
-      CREATE TABLE customers (
-        id SERIAL PRIMARY KEY,
-        first_name VARCHAR(50) NOT NULL,
-        last_name VARCHAR(50) NOT NULL,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        phone VARCHAR(20) NOT NULL,
-        status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'inactive')),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // 4. Businesses
-    await query(`
-      CREATE TABLE businesses (
-        id SERIAL PRIMARY KEY,
-        owner_id INT REFERENCES customers(id) ON DELETE CASCADE,
-        company_name VARCHAR(100) NOT NULL,
-        industry VARCHAR(50) NOT NULL,
-        tax_id VARCHAR(30) UNIQUE NOT NULL,
-        annual_revenue NUMERIC(15, 2),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // 5. Accounts
-    await query(`
-      CREATE TABLE accounts (
-        id SERIAL PRIMARY KEY,
-        customer_id INT REFERENCES customers(id) ON DELETE SET NULL,
-        business_id INT REFERENCES businesses(id) ON DELETE SET NULL,
-        account_number VARCHAR(20) UNIQUE NOT NULL,
-        account_type VARCHAR(20) CHECK (account_type IN ('checking', 'savings', 'loan', 'credit')),
-        balance NUMERIC(15, 2) DEFAULT 0.00,
-        currency VARCHAR(3) DEFAULT 'USD',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // 6. Cards
-    await query(`
-      CREATE TABLE cards (
-        id SERIAL PRIMARY KEY,
-        account_id INT REFERENCES accounts(id) ON DELETE CASCADE,
-        card_number VARCHAR(19) UNIQUE NOT NULL,
-        card_type VARCHAR(20) CHECK (card_type IN ('debit', 'credit')),
-        expiration_date DATE NOT NULL,
-        cvv VARCHAR(3) NOT NULL,
-        status VARCHAR(20) CHECK (status IN ('active', 'blocked', 'expired')),
-        credit_limit NUMERIC(10, 2) DEFAULT 0.00
-      );
-    `);
-
-    // 7. Transactions
-    await query(`
-      CREATE TABLE transactions (
-        id SERIAL PRIMARY KEY,
-        sender_account_id INT REFERENCES accounts(id) ON DELETE SET NULL,
-        receiver_account_id INT REFERENCES accounts(id) ON DELETE SET NULL,
-        amount NUMERIC(15, 2) NOT NULL,
-        transaction_type VARCHAR(20) CHECK (transaction_type IN ('transfer', 'deposit', 'withdrawal', 'fee', 'payment')),
-        status VARCHAR(20) CHECK (status IN ('pending', 'completed', 'failed')),
-        description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // 8. Loans
-    await query(`
-      CREATE TABLE loans (
-        id SERIAL PRIMARY KEY,
-        customer_id INT REFERENCES customers(id) ON DELETE SET NULL,
-        business_id INT REFERENCES businesses(id) ON DELETE SET NULL,
-        amount NUMERIC(15, 2) NOT NULL,
-        interest_rate NUMERIC(5, 2) NOT NULL,
-        term_months INT NOT NULL,
-        start_date DATE NOT NULL,
-        status VARCHAR(20) CHECK (status IN ('active', 'fully_paid', 'defaulted'))
-      );
-    `);
-
-    // 9. Loan Payments
-    await query(`
-      CREATE TABLE loan_payments (
-        id SERIAL PRIMARY KEY,
-        loan_id INT REFERENCES loans(id) ON DELETE CASCADE,
-        account_id INT REFERENCES accounts(id) ON DELETE SET NULL,
-        amount_paid NUMERIC(15, 2) NOT NULL,
-        payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        t24_id VARCHAR(20) REFERENCES clients(t24_id) ON DELETE CASCADE,
+        financial_year DATE NOT NULL,
+        pr_category VARCHAR(50) NOT NULL,
+        base_rating INT NOT NULL,
+        final_rating INT NOT NULL,
+        orr_authorized_by_bu_date DATE NOT NULL,
+        orr_authorized_by_cd_date DATE NOT NULL
       );
     `);
 
     console.log("Seeding data...");
 
-    // Seed Branches
+    // Seed Clients
     await query(`
-      INSERT INTO branches (name, city, address) VALUES
-      ('Main Branch', 'New York', '100 Wall St'),
-      ('Sunset Branch', 'Los Angeles', '500 Sunset Blvd'),
-      ('Loop Branch', 'Chicago', '120 La Salle St'),
-      ('Tech Branch', 'San Francisco', '800 Market St'),
-      ('North Branch', 'Seattle', '200 Pine St'),
-      ('Peach Branch', 'Atlanta', '400 Peachtree St'),
-      ('Capital Branch', 'Washington DC', '300 Pennsylvania Ave'),
-      ('River Branch', 'Boston', '150 Congress St'),
-      ('Star Branch', 'Dallas', '250 Main St'),
-      ('Bay Branch', 'Miami', '110 Biscayne Blvd');
+      INSERT INTO clients (crimsid, t24_id, customer_name, pr_category, business_segment, branch_code, branch_name, sbp_parent, sbp_child, client_sales, client_equity, client_opening_date, legal_entity, pep) VALUES
+      (12355, '145345670000', 'Fauji Fertilizer', 'Corporate', 'CIBG', 5, 'Main Branch', 'MANUFACTURE OF CHEMICALS AND CHEMICAL PRODUCTS', 'Manufacture Of Fertilizers And Nitrogen Compounds', 5000000000, 25000000, '2024-05-25', 'Public Limited Company - Unlisted', 'No'),
+      (12356, '145345680000', 'Fatima Energy', 'Corporate', 'CIBG', 5, 'Main Branch', 'ELECTRICITY GAS STEAM AND AIR CONDITIONING SUPPLY', 'Electr Power Generation Transmission And Distributn- Hydal', 2348900000, 123450000, '2021-12-03', 'Public Limited Company - Unlisted', 'No'),
+      (12357, '145345690000', 'Master Textile Mills', 'Corporate', 'CIBG', 280, 'ISB Main', 'MANUFACTURE OF TEXTILES', 'Preparation And Spinning Of Textile Fibres - Others', 2678900000, 323455555, '2024-05-27', 'Private Limited Company - Unlisted', 'Yes'),
+      (12358, '145345700000', 'Afia Noor Textile Mills', 'Commercial', 'RBG', 12, 'Urdu Bazar', 'MANUFACTURE OF TEXTILES', 'Preparation And Spinning Of Textile Fibres - Others', 1432322222, 254432333, '2024-05-28', 'Private Limited Company - Unlisted', 'Yes'),
+      (12359, '145345710000', 'Euro Oil Traders', 'Corporate', 'CIBG', 56, 'Faisalabad Main', 'RETAIL TRADE EXCEPT OF MOTOR VEHICLES AND MOTORCYCLES', 'Others Retail Sale N.E.C', 2897892000, 25475544, '2024-05-29', 'Private Limited Company - Unlisted', 'Yes'),
+      (12360, '145345720000', 'Prime Oil & Ghee Mills', 'Commercial', 'RBG', 24, 'Jodia Bazar', 'MANUFACTURE OF FOOD PRODUCTS', 'Manufacture Of Vegetable And Animal Oils And Fats', 2897892001, 15475544, '2022-04-30', 'Private Limited Company - Unlisted', 'Yes'),
+      (12361, '145345730000', 'Hajveri Oil Extraction', 'Commercial', 'RBG', 89, 'Jodia Bazar', 'MANUFACTURE OF FOOD PRODUCTS', 'Manufacture Of Other Food Products N.E.C.,', 287892002, 25423544, '2024-05-31', 'Private Limited Company - Unlisted', 'No'),
+      (12362, '145345740000', 'Muhammad Imran Anwar', 'SE', 'IBG', 3344, 'IBG - Multan', 'INDIVIDUALS', 'OTHER SALARIED PERSONS', 2892003, 23375544, '2019-06-10', 'Individual', 'No'),
+      (12363, '145345750000', 'Ali Raza Anwar', 'SE', 'RBG', 212, 'Main Sialkot', 'INDIVIDUALS', 'OTHER SALARIED PERSONS', 1357200, 10325378, '2024-06-02', 'Individual', 'No'),
+      (12364, '145345760000', 'Pak Green Pharmacy', 'ME', 'IBG', 4467, 'IBG - Sialkot', 'HUMAN HEALTH ACTIVITIES', 'Other Human Health Activities', 27892005, 25473222, '2024-06-03', 'Individual', 'Yes'),
+      (12365, '145345770000', 'Noor Pharma Link', 'ME', 'RBG', 39, 'Susan Road - Multan', 'HUMAN HEALTH ACTIVITIES', 'Other Human Health Activities', 18978926, 54475544, '2024-06-04', 'Private Limited Company - Unlisted', 'Yes'),
+      (12366, '145345780000', 'OIL & GAS DEVELOPMENT COMPANY LTD', 'Corporate', 'CIBG', 39, 'Gulberg Main', 'MANUFACTURE OF CHEMICALS AND CHEMICAL PRODUCTS', 'Manufacture Of Fertilizers And Nitrogen Compounds', 2832892007, 35475544, '2024-11-05', 'Public Limited Company - listed', 'No'),
+      (12367, '145345790000', 'SUI SOUTHERN GAS COMPANY', 'Corporate', 'CIBG', 5, 'Gulberg Main', 'PUBLIC SECTOR ENTERPRISES', 'Sui Southern Gas Company Ltd.', 5897892008, 11575544, '2022-06-09', 'Public Limited Company - listed', 'No'),
+      (12368, '145345800000', 'Minhas Autos', 'SE', 'IBG', 2344, 'IBG - Gulberg', 'WHOLESALE TRADE EXCEPT OF MOTOR VEHICLES AND MOTORCYCLES', 'Non-Specialized Wholesale Trade', 1157200, 27875544, '2024-12-07', 'Sole Proprietorship', 'No'),
+      (12369, '145345810000', 'Nexgen Auto (Private) Limited', 'ME', 'RBG', 654, 'F-10 Markaz, Islamabad', 'MANUFACTURE OF MOTOR VEHICLES TRAILERS AND SEMI-TRAILERS', 'Manufacture Of Motor Vehicles', 21292005, 25475544, '2024-06-08', 'Sole Proprietorship', 'No'),
+      (12370, '145345820000', 'Faisalabad Cloth House', 'Commercial', 'RBG', 5, 'Hyderabad Main', 'MANUFACTURE OF TEXTILES', 'Preparation And Spinning Of Textile Fibres - Cotton', 2897892011, 11575544, '2024-06-09', 'Private Limited Company - Unlisted', 'No'),
+      (12371, '145345830000', 'Fazal Cloth House', 'ME', 'IBG', 2232, 'IBG - Quetta', 'MANUFACTURE OF TEXTILES', 'Preparation And Spinning Of Textile Fibres - Cotton', 12292005, 21275544, '2024-06-10', 'Private Limited Company - Unlisted', 'No'),
+      (12372, '145345840000', 'Qasim Autos', 'SE', 'IBG', 6544, 'IBG - Bhawalpur', 'MANUFACTURE OF MOTOR VEHICLES TRAILERS AND SEMI-TRAILERS', 'Manufacture Of Motor Vehicles', 9792013, 25475544, '2024-06-11', 'Sole Proprietorship', 'No'),
+      (12373, '145345850000', 'Roshan Agri Business', 'Agri', 'RBG', 691, 'Vihari', 'Crop Animal Production', 'Post Harvest Crop Activities', 7892014, 25475544, '2024-06-12', 'Sole Proprietorship', 'No'),
+      (12374, '145345860000', 'Cheema Agri Farm', 'Agri', 'RBG', 231, 'Nawabshah', 'Crop Animal Production', 'Post Harvest Crop Activities', 2897205, 25475544, '2024-06-13', 'Sole Proprietorship', 'No');
     `);
 
-    // Seed Employees
+    // Seed Ratings
     await query(`
-      INSERT INTO employees (branch_id, first_name, last_name, role, salary, hire_date) VALUES
-      (1, 'Alice', 'Smith', 'Manager', 95000.00, '2020-01-15'),
-      (2, 'Bob', 'Johnson', 'Teller', 45000.00, '2021-03-22'),
-      (3, 'Charlie', 'Brown', 'Loan Officer', 75000.00, '2019-07-10'),
-      (4, 'Diana', 'Prince', 'Advisor', 82000.00, '2018-11-05'),
-      (5, 'Evan', 'Wright', 'Manager', 92000.00, '2022-05-18'),
-      (6, 'Fiona', 'Gallagher', 'Teller', 43000.00, '2023-02-10'),
-      (7, 'George', 'Costanza', 'Loan Officer', 78000.00, '2017-08-25'),
-      (8, 'Hannah', 'Baker', 'Teller', 44000.00, '2022-09-01'),
-      (9, 'Ian', 'Malcolm', 'Advisor', 85000.00, '2016-04-12'),
-      (10, 'Julia', 'Roberts', 'Manager', 97000.00, '2015-12-01');
-    `);
-
-    // Seed Customers
-    await query(`
-      INSERT INTO customers (first_name, last_name, email, phone, status) VALUES
-      ('John', 'Doe', 'john.doe@email.com', '555-0101', 'active'),
-      ('Jane', 'Smith', 'jane.smith@email.com', '555-0102', 'active'),
-      ('Michael', 'Green', 'michael.g@email.com', '555-0103', 'active'),
-      ('Sarah', 'Connor', 'sarah.c@email.com', '555-0104', 'active'),
-      ('Bruce', 'Wayne', 'bruce@waynecorp.com', '555-0105', 'active'),
-      ('Clark', 'Kent', 'clark.k@dailyplanet.com', '555-0106', 'active'),
-      ('Tony', 'Stark', 'tony@starkindustries.com', '555-0107', 'active'),
-      ('Peter', 'Parker', 'peter.p@bugle.com', '555-0108', 'active'),
-      ('Walter', 'White', 'walter.w@graymatter.com', '555-0109', 'suspended'),
-      ('Arthur', 'Dent', 'arthur.d@galaxy.com', '555-0110', 'inactive');
-    `);
-
-    // Seed Businesses
-    await query(`
-      INSERT INTO businesses (owner_id, company_name, industry, tax_id, annual_revenue) VALUES
-      (5, 'Wayne Enterprises', 'Technology', 'TAX-001', 15000000.00),
-      (6, 'Daily Planet', 'Media', 'TAX-002', 2000000.00),
-      (7, 'Stark Industries', 'Defense & Energy', 'TAX-003', 50000000.00),
-      (8, 'Parker Photography', 'Creative Services', 'TAX-004', 50000.00),
-      (9, 'A1A Carwash', 'Automotive Services', 'TAX-005', 500000.00),
-      (10, 'Dent Consulting', 'Professional Services', 'TAX-006', 120000.00),
-      (3, 'Green Foods', 'Retail & Grocery', 'TAX-007', 350000.00),
-      (4, 'Connor Security', 'Defense Systems', 'TAX-008', 800000.00),
-      (1, 'Doe Logistics', 'Transportation', 'TAX-009', 600000.00),
-      (2, 'Smith Bakery', 'Food & Beverage', 'TAX-010', 150000.00);
-    `);
-
-    // Seed Accounts
-    await query(`
-      INSERT INTO accounts (customer_id, business_id, account_number, account_type, balance, currency) VALUES
-      (1, NULL, 'ACC-001', 'checking', 1250.50, 'USD'),
-      (2, NULL, 'ACC-002', 'savings', 10500.00, 'USD'),
-      (NULL, 1, 'ACC-003', 'checking', 5000000.00, 'USD'),
-      (NULL, 3, 'ACC-004', 'checking', 12000000.00, 'USD'),
-      (NULL, 5, 'ACC-005', 'checking', 45000.00, 'USD'),
-      (4, NULL, 'ACC-006', 'loan', -15000.00, 'USD'),
-      (5, NULL, 'ACC-007', 'checking', 750000.00, 'USD'),
-      (3, NULL, 'ACC-008', 'savings', 2500.00, 'USD'),
-      (NULL, 7, 'ACC-009', 'savings', 85000.00, 'USD'),
-      (NULL, 9, 'ACC-010', 'checking', 32000.00, 'USD');
-    `);
-
-    // Seed Cards
-    await query(`
-      INSERT INTO cards (account_id, card_number, card_type, expiration_date, cvv, status, credit_limit) VALUES
-      (1, '4111-2222-3333-4444', 'debit', '2028-12-31', '123', 'active', 0.00),
-      (2, '4222-3333-4444-5555', 'debit', '2027-06-30', '456', 'active', 0.00),
-      (3, '4333-4444-5555-6666', 'credit', '2029-01-31', '789', 'active', 100000.00),
-      (4, '4444-5555-6666-7777', 'credit', '2030-05-31', '321', 'active', 500000.00),
-      (5, '4555-6666-7777-8888', 'debit', '2028-08-31', '654', 'active', 0.00),
-      (7, '4666-7777-8888-9999', 'credit', '2029-10-31', '987', 'active', 50000.00),
-      (8, '4777-8888-9999-0000', 'debit', '2027-03-31', '159', 'active', 0.00),
-      (9, '4888-9999-0000-1111', 'credit', '2028-11-30', '753', 'active', 20000.00),
-      (10, '4999-0000-1111-2222', 'debit', '2028-02-28', '852', 'active', 0.00),
-      (7, '4000-1111-2222-3333', 'credit', '2027-07-31', '951', 'blocked', 10000.00);
-    `);
-
-    // Seed Transactions
-    await query(`
-      INSERT INTO transactions (sender_account_id, receiver_account_id, amount, transaction_type, status, description) VALUES
-      (3, 10, 25000.00, 'transfer', 'completed', 'Payment for logistics services'),
-      (NULL, 1, 1500.00, 'deposit', 'completed', 'Monthly Payroll Deposit'),
-      (2, NULL, 200.00, 'withdrawal', 'completed', 'ATM Cash Withdrawal'),
-      (4, 5, 1200.00, 'transfer', 'completed', 'Stark Ind. clean-up services payment'),
-      (4, NULL, 50.00, 'fee', 'completed', 'Monthly Account Maintenance Fee'),
-      (1, 6, 500.00, 'payment', 'completed', 'Loan Repayment Installment'),
-      (7, 4, 50000.00, 'transfer', 'completed', 'Private Investment Contribution'),
-      (NULL, 8, 800.00, 'deposit', 'completed', 'Venmo transfer from friend'),
-      (9, NULL, 4500.00, 'withdrawal', 'completed', 'Cash withdrawal for store supplies'),
-      (2, 1, 120.00, 'transfer', 'completed', 'Bakery catering payment');
-    `);
-
-    // Seed Loans
-    await query(`
-      INSERT INTO loans (customer_id, business_id, amount, interest_rate, term_months, start_date, status) VALUES
-      (1, NULL, 5000.00, 5.50, 24, '2025-01-10', 'active'),
-      (2, NULL, 12000.00, 4.80, 36, '2024-06-15', 'active'),
-      (NULL, 1, 2000000.00, 3.50, 60, '2023-03-20', 'active'),
-      (NULL, 3, 5000000.00, 3.20, 120, '2022-09-01', 'active'),
-      (NULL, 5, 50000.00, 6.00, 48, '2024-11-12', 'active'),
-      (4, NULL, 15000.00, 7.20, 36, '2025-04-05', 'active'),
-      (3, NULL, 8000.00, 5.80, 24, '2025-02-18', 'active'),
-      (NULL, 7, 60000.00, 5.00, 48, '2024-08-20', 'active'),
-      (NULL, 9, 40000.00, 5.20, 36, '2024-10-05', 'active'),
-      (NULL, 10, 20000.00, 6.50, 24, '2025-05-01', 'active');
-    `);
-
-    // Seed Loan Payments
-    await query(`
-      INSERT INTO loan_payments (loan_id, account_id, amount_paid, payment_date) VALUES
-      (1, 1, 250.00, '2025-02-10 10:00:00'),
-      (2, 2, 400.00, '2025-02-15 11:30:00'),
-      (3, 3, 45000.00, '2025-02-20 09:15:00'),
-      (4, 4, 110000.00, '2025-02-01 14:00:00'),
-      (5, 5, 1500.00, '2025-02-12 16:45:00'),
-      (6, 6, 500.00, '2025-02-05 12:00:00'),
-      (7, 8, 380.00, '2025-02-18 10:20:00'),
-      (8, 9, 1600.00, '2025-02-20 15:30:00'),
-      (9, 10, 1200.00, '2025-02-05 08:45:00'),
-      (10, 2, 950.00, '2025-02-15 11:30:00');
+      INSERT INTO ratings (t24_id, financial_year, pr_category, base_rating, final_rating, orr_authorized_by_bu_date, orr_authorized_by_cd_date) VALUES
+      ('145345670000', '2024-06-30', 'Corporate', 5, 5, '2024-08-31', '2024-08-31'),
+      ('145345670000', '2025-06-30', 'Commercial', 4, 4, '2025-08-17', '2025-08-23'),
+      ('145345670000', '2026-06-30', 'Corporate', 3, 3, '2026-07-02', '2026-07-15'),
+      ('145345780000', '2025-06-30', 'Corporate', 2, 2, '2025-07-03', '2025-07-03'),
+      ('145345780000', '2026-06-30', 'Corporate', 1, 1, '2026-07-19', '2026-07-20'),
+      ('145345750000', '2025-06-30', 'SE', 7, 7, '2025-10-05', '2025-10-23'),
+      ('145345750000', '2025-06-30', 'SE', 8, 12, '2026-07-03', '2026-07-10'),
+      ('145345760000', '2024-06-30', 'ME', 5, 5, '2024-08-31', '2024-08-31'),
+      ('145345760000', '2025-06-30', 'ME', 6, 6, '2025-08-17', '2025-08-23'),
+      ('145345760000', '2026-06-30', 'ME', 4, 4, '2026-07-02', '2026-07-15'),
+      ('145345860000', '2026-06-30', 'Agri', 6, 7, '2026-07-12', '2026-07-20');
     `);
 
     console.log("Database seeded successfully!");
