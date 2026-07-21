@@ -58,7 +58,7 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
         
     # Poll status endpoint to check processing state
     status_url = f"{EMBEDDING_SERVER_URL.rstrip('/')}/parse-status/{task_id}"
-    print("⏳ Waiting for cloud GPU processing (polling every 5 seconds)...")
+    print("⏳ Waiting for cloud GPU processing (polling every 10 seconds)...")
     
     chunks = []
     start_time = time.time()
@@ -110,7 +110,7 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
         )
     )
 
-    # Upsert to Qdrant
+    # Upsert to Qdrant in batches to avoid payload limit (32MB)
     print("Writing vectors to local Qdrant...")
     points = []
     for chunk in chunks:
@@ -130,10 +130,16 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
             )
         )
         
-    qdrant_client.upsert(
-        collection_name=COLLECTION_NAME,
-        points=points
-    )
+    batch_size = 200
+    total_batches = (len(points) + batch_size - 1) // batch_size
+    for idx, i in enumerate(range(0, len(points), batch_size)):
+        batch = points[i : i + batch_size]
+        qdrant_client.upsert(
+            collection_name=COLLECTION_NAME,
+            points=batch
+        )
+        print(f"  -> Upserted batch {idx + 1}/{total_batches} ({len(batch)} points)...")
+        
     print(f"✅ Successfully ingested {len(points)} vectors for {filename}.")
 
 def main():
