@@ -6,22 +6,9 @@ import requests
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
-from docling.document_converter import DocumentConverter
-from docling.chunking import HybridChunker
-import logging
 
 # Load environment variables
 load_dotenv()
-
-# Configure Logging to see Docling conversion progress in real-time
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S"
-)
-logging.getLogger("docling").setLevel(logging.DEBUG)
-logging.getLogger("docling.pipeline.base_pipeline").setLevel(logging.DEBUG)
-logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 # Configuration
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -29,23 +16,8 @@ COLLECTION_NAME = "pdf_chunks"
 # Nomic v1.5 embedding dimension is 768
 EMBEDDING_DIMENSION = 768
 
-# Fetch the AI Server URL (from Modal embedding server deploy, or fall back)
-AI_SERVER_URL = os.getenv("AI_SERVER_URL", "http://localhost:8000")
-
-def get_embedding(texts: list[str]) -> list[list[float]]:
-    """Calls the remote Modal embedding server to generate vector embeddings."""
-    url = f"{AI_SERVER_URL.rstrip('/')}/embed"
-    try:
-        response = requests.post(url, json={"texts": texts}, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        if not data.get("success"):
-            raise ValueError(f"Embedding server error: {data.get('error_message')}")
-        return data["embeddings"]
-    except Exception as e:
-        print(f"❌ Failed to get embeddings from {url}. Error: {e}")
-        print("Please ensure your Modal embedding server is running and AI_SERVER_URL is set correctly.")
-        sys.exit(1)
+# Fetch the Embedding Server URL from environment
+EMBEDDING_SERVER_URL = os.getenv("EMBEDDING_SERVER_URL", "http://localhost:8000")
 
 def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
     filename = os.path.basename(pdf_path)
@@ -61,46 +33,34 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
     year = int(match.group(2))
     print(f"🏢 Company: {company_name} | 📅 Year: {year}")
     
-    # 1. Parse PDF using Docling
-    print("Parsing layout with Docling...")
-    converter = DocumentConverter()
-    result = converter.convert(pdf_path)
-    doc = result.document
-    
-    # 2. Chunking with Docling's native Hybrid Chunker (Layout & Token aware)
-    print("Generating structure-aware chunks with Docling HybridChunker...")
-    chunker = HybridChunker(max_tokens=512)
-    chunk_list = list(chunker.chunk(dl_doc=doc))
+    # Send PDF to remote server for parsing & embedding generation
+    url = f"{EMBEDDING_SERVER_URL.rstrip('/')}/parse-pdf"
+    print(f"📡 Sending PDF to remote GPU server for layout parsing and embedding generation...")
     
     chunks = []
-    for chunk in chunk_list:
-        # Get page numbers from document item provenance (prov)
-        pages = sorted({
-            prov.page_no 
-            for item in chunk.meta.doc_items 
-            for prov in item.prov 
-            if hasattr(prov, "page_no")
-        })
-        page_number = pages[0] if pages else 1
+    try:
+        with open(pdf_path, 'rb') as f:
+            files = {'file': (filename, f, 'application/pdf')}
+            data = {'company': company_name, 'year': year}
+            # Set a long timeout (600s / 10 minutes) for large files
+            response = requests.post(url, files=files, data=data, timeout=600)
+            response.raise_for_status()
+            res_json = response.json()
+            if not res_json.get("success"):
+                raise ValueError(res_json.get("error_message") or "Unknown remote error")
+            
+            chunks = res_json.get("chunks", [])
+    except Exception as e:
+        print(f"❌ Remote parsing/embedding failed: {e}")
+        print("Please verify that your Remote GPU Embedding Server is running and EMBEDDING_SERVER_URL is set correctly.")
+        return
         
-        # Get hierarchical section path
-        section_path = " > ".join(chunk.meta.headings) if chunk.meta.headings else "General"
-        
-        # Get contextualized text (natively prepends relevant parent headings)
-        context_text = chunker.contextualize(chunk)
-        
-        chunks.append({
-            "text": context_text,
-            "page_number": page_number,
-            "section": section_path
-        })
-        
-    print(f"Generated {len(chunks)} chunks.")
+    print(f"📥 Received {len(chunks)} processed chunks from remote server.")
     if not chunks:
         return
 
-    # 3. Clean existing vectors for this specific document to prevent duplication (Idempotent run)
-    print(f"Cleaning previous indexes for '{filename}'...")
+    # Clean existing vectors for this specific document to prevent duplication (Idempotent run)
+    print(f"🧹 Cleaning previous indexes for '{filename}' in Qdrant...")
     qdrant_client.delete(
         collection_name=COLLECTION_NAME,
         points_selector=Filter(
@@ -113,26 +73,10 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
         )
     )
 
-    # 4. Generate Embeddings & Batch Upsert
-    print("Generating embeddings via server...")
-    # Prefix text with Nomic-embed search prefix + our metadata context
-    texts_to_embed = [
-        f"search_document: [Company: {company_name} | Year: {year}] {c['text']}"
-        for c in chunks
-    ]
-    
-    # Process in batches of 16 to avoid payload size errors
-    batch_size = 16
-    embeddings = []
-    for i in range(0, len(texts_to_embed), batch_size):
-        batch = texts_to_embed[i:i+batch_size]
-        print(f"  Embedding batch {i // batch_size + 1}/{(len(texts_to_embed) - 1) // batch_size + 1}...")
-        embeddings.extend(get_embedding(batch))
-        
-    # 5. Upsert to Qdrant
-    print("Upserting vectors to Qdrant...")
+    # Upsert to Qdrant
+    print("Writing vectors to local Qdrant...")
     points = []
-    for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+    for chunk in chunks:
         payload = {
             "text": chunk["text"],
             "company": company_name,
@@ -144,7 +88,7 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
         points.append(
             PointStruct(
                 id=str(uuid.uuid4()),
-                vector=embedding,
+                vector=chunk["embedding"],
                 payload=payload
             )
         )
@@ -156,6 +100,7 @@ def ingest_pdf(pdf_path: str, qdrant_client: QdrantClient):
     print(f"✅ Successfully ingested {len(points)} vectors for {filename}.")
 
 def main():
+    # Target Storage directory relative to Backend
     storage_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../Storage"))
     if not os.path.exists(storage_dir):
         print(f"❌ Storage directory not found at: {storage_dir}")
@@ -168,12 +113,11 @@ def main():
         return
 
     # Initialize Qdrant client
-    print(f"Connecting to Qdrant at {QDRANT_URL}...")
+    print(f"Connecting to local Qdrant at {QDRANT_URL}...")
     try:
         qdrant_client = QdrantClient(url=QDRANT_URL)
         # Verify connection
         qdrant_client.get_collections()
-        print(f"✅ Successfully connected to Qdrant at {QDRANT_URL}")
     except Exception as e:
         print(f"❌ Failed to connect to Qdrant: {e}")
         print("Please verify that Qdrant is running locally.")

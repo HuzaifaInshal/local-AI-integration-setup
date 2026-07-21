@@ -1,4 +1,5 @@
 import os
+import tempfile
 from pydantic import BaseModel
 import modal
 
@@ -15,12 +16,20 @@ image = (
         "pydantic",
         "hf-transfer",
         "sentencepiece",
-        "einops"  # Required for Nomic models
+        "einops",  # Required for Nomic models
+        "docling",  # Required for layout-aware PDF parsing in the cloud
+        "python-multipart",  # Required to receive files in FastAPI
+        "pandas",  # Required for docling tables
+        "tabulate"  # Required for docling tables markdown serialization
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
-    # Pre-download the model weights during Docker build step to eliminate cold-start loading time
+    # Pre-download the nomic model weights during Docker build step to eliminate cold-start loading time
     .run_commands(
         "python -c 'from huggingface_hub import snapshot_download; snapshot_download(\"nomic-ai/nomic-embed-text-v1.5\")'"
+    )
+    # Pre-download the docling models during Docker build step
+    .run_commands(
+        "python -c 'from docling.document_converter import DocumentConverter; DocumentConverter()'"
     )
 )
 
@@ -39,14 +48,28 @@ class EmbeddingServer:
     @modal.enter()
     def load_model(self):
         from transformers import AutoTokenizer, AutoModel
-        
+        from docling.document_converter import DocumentConverter
+        from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+        from docling.chunking import HybridChunker
+        import torch
+
         print("Loading tokenizer...")
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
         
         print("Loading model...")
         self.model = AutoModel.from_pretrained(MODEL_NAME, trust_remote_code=True)
+        self.model = self.model.to("cuda" if torch.cuda.is_available() else "cpu")
         self.model.eval()
-        print("Embedding model loaded successfully.")
+        
+        print("Configuring Docling PDF Converter with GPU...")
+        acc_options = AcceleratorOptions(
+            device=AcceleratorDevice.CUDA if torch.cuda.is_available() else AcceleratorDevice.CPU
+        )
+        self.doc_converter = DocumentConverter(accelerator_options=acc_options)
+        
+        # Initialize standard hybrid chunker
+        self.chunker = HybridChunker(max_tokens=512)
+        print("Embedding model and Docling pipeline loaded successfully.")
 
     def mean_pooling(self, model_output, attention_mask):
         import torch
@@ -70,8 +93,8 @@ class EmbeddingServer:
 
     @modal.asgi_app()
     def entrypoint(self):
-        from fastapi import FastAPI
-        web_app = FastAPI(title="Nomic Embedding API")
+        from fastapi import FastAPI, UploadFile, Form, File
+        web_app = FastAPI(title="Nomic Embedding & Docling API")
 
         @web_app.get("/")
         def root():
@@ -95,5 +118,95 @@ class EmbeddingServer:
                     embeddings=[],
                     error_message=str(e)
                 )
+
+        @web_app.post("/parse-pdf")
+        async def parse_pdf(
+            file: UploadFile = File(...),
+            company: str = Form(...),
+            year: int = Form(...)
+        ):
+            try:
+                # Save uploaded file to a temporary file
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                    content = await file.read()
+                    tmp.write(content)
+                    tmp_path = tmp.name
+
+                try:
+                    print(f"Parsing PDF on GPU for {company} ({year})...")
+                    # 1. Parse PDF layout via Docling
+                    result = self.doc_converter.convert(tmp_path)
+                    doc = result.document
+
+                    # 2. Chunking with Hybrid Chunker
+                    chunk_list = list(self.chunker.chunk(dl_doc=doc))
+
+                    chunks = []
+                    for chunk in chunk_list:
+                        # Get page numbers
+                        pages = sorted({
+                            prov.page_no 
+                            for item in chunk.meta.doc_items 
+                            for prov in item.prov 
+                            if hasattr(prov, "page_no")
+                        })
+                        page_number = pages[0] if pages else 1
+                        
+                        # Get section path
+                        section_path = " > ".join(chunk.meta.headings) if chunk.meta.headings else "General"
+                        
+                        # Get contextualized text
+                        context_text = self.chunker.contextualize(chunk)
+                        
+                        chunks.append({
+                            "text": context_text,
+                            "page_number": page_number,
+                            "section": section_path
+                        })
+
+                    if not chunks:
+                        return {"success": True, "chunks": []}
+
+                    # 3. Generate embeddings on GPU
+                    print(f"Generating embeddings for {len(chunks)} chunks...")
+                    texts_to_embed = [
+                        f"search_document: [Company: {company} | Year: {year}] {c['text']}"
+                        for c in chunks
+                    ]
+                    
+                    # Batch calls
+                    batch_size = 32
+                    all_embeddings = []
+                    for i in range(0, len(texts_to_embed), batch_size):
+                        batch = texts_to_embed[i:i+batch_size]
+                        all_embeddings.extend(self.get_embeddings(batch))
+
+                    # 4. Combine embeddings with text payloads
+                    output_chunks = []
+                    for chunk, embedding in zip(chunks, all_embeddings):
+                        output_chunks.append({
+                            "text": chunk["text"],
+                            "page_number": chunk["page_number"],
+                            "section": chunk["section"],
+                            "embedding": embedding
+                        })
+
+                    return {
+                        "success": True,
+                        "chunks": output_chunks
+                    }
+                finally:
+                    # Clean up temporary file
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+
+            except Exception as e:
+                import traceback
+                print(traceback.format_exc())
+                return {
+                    "success": False,
+                    "chunks": [],
+                    "error_message": str(e)
+                }
 
         return web_app
